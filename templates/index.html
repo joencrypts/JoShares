@@ -10,16 +10,33 @@
         body { font-family: Arial, sans-serif; background: #181818; color: #fff; margin: 0; }
         .container { max-width: 600px; margin: 40px auto; background: #232323; border-radius: 10px; padding: 24px; box-shadow: 0 2px 12px #0008; }
         h1 { text-align: center; }
-        .channel-list { display: flex; justify-content: space-around; margin-bottom: 24px; }
-        .channel-btn { background: #333; color: #fff; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 1.1em; }
+        .channel-list { display: flex; flex-wrap: wrap; justify-content: space-around; margin-bottom: 24px; }
+        .channel-btn { background: #333; color: #fff; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 1.1em; margin-bottom: 8px; }
         .channel-btn.selected { background: #1db954; }
-        #player { margin: 20px 0; }
-        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; }
+        #player { margin: 20px 0; width: 100%; max-width: 100vw; }
+        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; flex-wrap: wrap; }
         .controls button { background: #1db954; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
         .video-info { text-align: center; margin-bottom: 10px; }
         .hidden { display: none; }
-        .input-row { display: flex; gap: 8px; margin-bottom: 16px; }
-        .input-row input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444; }
+        .input-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .input-row input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444; min-width: 0; }
+        #chat-container { background: #181818; border-radius: 8px; margin-top: 18px; padding: 12px; box-shadow: 0 1px 4px #0004; }
+        #chat-messages { height: 160px; overflow-y: auto; background: #222; border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 0.98em; }
+        .chat-message { margin-bottom: 6px; }
+        .chat-username { color: #1db954; font-weight: bold; margin-right: 4px; }
+        #chat-input-row { display: flex; gap: 6px; }
+        #chat-input { flex: 1; padding: 7px; border-radius: 4px; border: 1px solid #444; }
+        #send-chat-btn { background: #1db954; color: #fff; border: none; padding: 7px 14px; border-radius: 4px; cursor: pointer; }
+        @media (max-width: 700px) {
+            .container { max-width: 98vw; padding: 8px; }
+            #player { width: 100vw; min-width: 0; }
+        }
+        @media (max-width: 480px) {
+            .container { padding: 2vw; }
+            .channel-btn { font-size: 1em; padding: 10px 10px; }
+            #player { height: 180px !important; }
+            .controls button { padding: 7px 8px; font-size: 0.95em; }
+        }
     </style>
 </head>
 <body>
@@ -51,6 +68,13 @@
         <div class="controls">
             <button id="play-btn">Play</button>
             <button id="pause-btn">Pause</button>
+        </div>
+        <div id="chat-container">
+            <div id="chat-messages"></div>
+            <div id="chat-input-row">
+                <input type="text" id="chat-input" placeholder="Type a message...">
+                <button id="send-chat-btn">Send</button>
+            </div>
         </div>
         <div style="text-align:center; margin-top:10px;">
             <button id="leave-btn" style="background:#e74c3c;">Leave Channel</button>
@@ -177,6 +201,9 @@ document.getElementById('join-btn').onclick = () => {
             setTimeout(() => { isSeeking = false; }, 500);
         });
         socket.on('change_video', syncToState);
+        socket.on('chat_message', function(data) {
+            addChatMessage(data.username, data.message);
+        });
     }
     socket.emit('join', { channel: currentChannel, username });
 };
@@ -217,6 +244,30 @@ document.getElementById('pause-btn').onclick = () => {
 document.getElementById('leave-btn').onclick = () => {
     location.reload();
 };
+
+function addChatMessage(username, message) {
+    const chatMessages = document.getElementById('chat-messages');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-message';
+    msgDiv.innerHTML = `<span class="chat-username">${username}:</span> ${message}`;
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+document.getElementById('send-chat-btn').onclick = function() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    if (message && socket && currentChannel) {
+        socket.emit('chat_message', { channel: currentChannel, username, message });
+        input.value = '';
+    }
+};
+
+document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('send-chat-btn').click();
+    }
+});
 </script>
 </body>
 </html> 

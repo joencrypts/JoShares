@@ -62,5 +62,12 @@ def on_change_video(data):
     channels[channel] = state
     emit('change_video', state, room=channel)
 
+@socketio.on('chat_message')
+def handle_chat_message(data):
+    channel = str(data['channel'])
+    username = data.get('username', 'Anonymous')
+    message = data.get('message', '')
+    emit('chat_message', {'username': username, 'message': message}, room=channel)
+
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000) 
