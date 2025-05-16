@@ -1,6 +1,6 @@
 # JoShares
 
-**JoShares** is a real-time, multi-channel YouTube listening and chat web app. Built with Flask-SocketIO, it lets users join shared music rooms, synchronize YouTube playback, chat, and manage a collaborative song queue—all with a modern, mobile-friendly, neon/glassmorphism UI.
+**JoShares** is a real-time, multi-channel YouTube listening and chat web app. Built with Flask-SocketIO, it lets users join shared music rooms, synchronize YouTube playback, chat, and manage a collaborative song queue all with a modern, mobile-friendly, neon/glassmorphism UI.
 
 ## Features
 
@@ -15,14 +15,10 @@
 - **Modern, Vibrant UI:** Neon/glassmorphism theme, glowing buttons, responsive layout, and a fixed navbar.
 - **Mobile-First:** Fully responsive and touch-friendly for all devices and orientations.
 
-## Screenshots
-
-<!-- Add screenshots here if available -->
-<!-- ![Screenshot 1](screenshots/screenshot1.png) -->
 
 ## Demo
 
-_Deploy your app and add a link here, or run locally as described below._
+https://joshares.onrender.com
 
 ## Getting Started
 
@@ -84,12 +80,8 @@ Pull requests are welcome! For major changes, please open an issue first to disc
 
 ## License
 
-[MIT](LICENSE) (add a LICENSE file if you want to specify)
+[MIT] 
 
 ## Author
 
 - [joencrypts](https://github.com/joencrypts)
-
----
-
-**Repository:** [https://github.com/joencrypts/JoShares](https://github.com/joencrypts/JoShares) 
