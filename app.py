@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, join_room, leave_room, emit
 import eventlet
+from collections import deque
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
@@ -17,6 +18,14 @@ channels = {
 # Track users per channel
 user_channels = { '1': set(), '2': set(), '3': set(), '4': set() }
 
+# Store last 100 chat messages per channel
+channel_messages = {
+    '1': deque(maxlen=100),
+    '2': deque(maxlen=100),
+    '3': deque(maxlen=100),
+    '4': deque(maxlen=100),
+}
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -25,12 +34,19 @@ def index():
 def on_join(data):
     username = data.get('username', 'Anonymous')
     channel = str(data['channel'])
+    if len(user_channels[channel]) >= 50:
+        emit('system_message', {'message': 'Channel is full (50 users max).'}, room=request.sid)
+        return
     join_room(channel)
     user_channels[channel].add(username)
     # Send current state to new user
     emit('sync', channels[channel], room=request.sid)
+    # Send chat history to new user
+    emit('chat_history', list(channel_messages[channel]), room=request.sid)
     # Notify others in the channel
     emit('system_message', {'message': f'👤 {username} joined the channel'}, room=channel)
+    # Emit active members count
+    emit('active_members', {'count': len(user_channels[channel])}, room=channel)
 
 @socketio.on('play')
 def on_play(data):
@@ -84,6 +100,8 @@ def on_leave(data):
     if username in user_channels[channel]:
         user_channels[channel].remove(username)
         emit('system_message', {'message': f'🚪 {username} left the channel'}, room=channel)
+        # Emit active members count
+        emit('active_members', {'count': len(user_channels[channel])}, room=channel)
 
 @socketio.on('chat_message')
 def handle_chat_message(data):
@@ -91,7 +109,14 @@ def handle_chat_message(data):
     username = data.get('username', 'Anonymous')
     message = data.get('message', '')
     reply_to = data.get('reply_to')  # Should be a dict: { 'username': ..., 'message': ... }
-    emit('chat_message', {'username': username, 'message': message, 'reply_to': reply_to}, room=channel)
+    msg_obj = {'username': username, 'message': message, 'reply_to': reply_to}
+    channel_messages[channel].append(msg_obj)
+    emit('chat_message', msg_obj, room=channel)
+
+@socketio.on('get_history')
+def get_history(data):
+    channel = str(data['channel'])
+    emit('chat_history', list(channel_messages[channel]), room=request.sid)
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000) 
