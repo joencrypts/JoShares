@@ -43,7 +43,7 @@
             padding: 32px 0;
             gap: 32px;
             width: 100vw;
-            margin-top: 70px;
+            margin-top: 66px;
         }
         .card {
             background: rgba(30, 30, 40, 0.45);
@@ -65,7 +65,12 @@
             width: 100%;
             box-sizing: border-box;
         }
-        .player-card { max-width: 420px; width: 100%; margin-bottom: 18px; }
+        .player-card {
+            max-width: 420px;
+            width: 100%;
+            margin-bottom: 18px;
+            margin-top: 50px;
+        }
         .chat-card { max-width: 420px; width: 100%; min-height: 480px; display: flex; flex-direction: column; }
         .logo {
             font-size: 2.2em;
@@ -218,7 +223,7 @@
         }
     </style>
 </head>
-<body style="padding-top:72px;">
+<body>
 <canvas class="bg-particles"></canvas>
 <div class="main-container">
     <div id="landing-section" class="card" style="max-width:420px;width:100%;margin:auto;">
@@ -298,56 +303,13 @@
     </div>
 </div>
 <script>
-// --- Background Particles Animation ---
-const canvas = document.querySelector('.bg-particles');
-const ctx = canvas.getContext('2d');
-let particles = [];
-let playingParticles = false;
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+// --- DEBUG LOGGING START ---
+console.log('[JoShares] Script loaded.');
+
+function debugLog(msg, ...args) {
+    console.log('[JoShares]', msg, ...args);
 }
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-function createParticles(count = 32) {
-    particles = [];
-    for (let i = 0; i < count; i++) {
-        particles.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            r: 1.5 + Math.random() * 2.5,
-            dx: (Math.random() - 0.5) * 0.7,
-            dy: (Math.random() - 0.5) * 0.7,
-            color: `hsla(${180 + Math.random()*120}, 100%, 60%, 0.7)`
-        });
-    }
-}
-createParticles();
-function animateParticles() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (let p of particles) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, 2 * Math.PI);
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 12;
-        ctx.fill();
-        p.x += p.dx;
-        p.y += p.dy;
-        if (p.x < 0 || p.x > canvas.width) p.dx *= -1;
-        if (p.y < 0 || p.y > canvas.height) p.dy *= -1;
-    }
-    if (playingParticles) requestAnimationFrame(animateParticles);
-}
-function startParticles() {
-    playingParticles = true;
-    animateParticles();
-}
-function stopParticles() {
-    playingParticles = false;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
-// --- End Background Particles ---
+// --- DEBUG LOGGING END ---
 
 let socket;
 let player;
@@ -365,10 +327,13 @@ const chatMessagesDiv = document.getElementById('chat-messages');
 function getYouTubeId(url) {
     const regExp = /^.*(?:youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
-    return (match && match[1].length === 11) ? match[1] : null;
+    const id = (match && match[1].length === 11) ? match[1] : null;
+    debugLog('Extracted video ID:', id, 'from URL:', url);
+    return id;
 }
 
 function onYouTubeIframeAPIReady() {
+    debugLog('YouTube IFrame API Ready. Creating player...');
     player = new YT.Player('player', {
         height: '315', width: '560',
         videoId: '',
@@ -381,16 +346,20 @@ function onYouTubeIframeAPIReady() {
 window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
 
 function onPlayerReady(event) {
+    debugLog('Player ready.');
     pipBtn.disabled = false;
     if (pendingSyncState) {
+        debugLog('Syncing to pending state:', pendingSyncState);
         syncToState(pendingSyncState);
         pendingSyncState = null;
     }
 }
 
 function onPlayerStateChange(event) {
+    debugLog('Player state changed:', event.data);
     if (!currentChannel) return;
     if (event.data === YT.PlayerState.PLAYING && !isSeeking) {
+        debugLog('Emitting play event.');
         socket.emit('play', {
             channel: currentChannel,
             video_id: currentVideoId,
@@ -399,6 +368,7 @@ function onPlayerStateChange(event) {
         animateMusicBars(true);
         startParticles();
     } else if (event.data === YT.PlayerState.PAUSED && !isSeeking) {
+        debugLog('Emitting pause event.');
         socket.emit('pause', {
             channel: currentChannel,
             timestamp: player.getCurrentTime(),
@@ -406,6 +376,7 @@ function onPlayerStateChange(event) {
         animateMusicBars(false);
         stopParticles();
     } else if (event.data === YT.PlayerState.ENDED && videoQueue.length > 0) {
+        debugLog('Video ended, playing next in queue.');
         const next = videoQueue.shift();
         updateQueueUI();
         currentVideoId = next.videoId;
@@ -449,14 +420,17 @@ function syncToState(state) {
 }
 
 function setVideoInfo(videoId) {
+    debugLog('Fetching video info for:', videoId);
     fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
         .then(r => r.json())
         .then(data => {
+            debugLog('Video info loaded:', data);
             document.getElementById('video-title').textContent = data.title;
             document.getElementById('video-thumb').src = data.thumbnail_url;
             document.getElementById('video-thumb').classList.remove('hidden');
         })
-        .catch(() => {
+        .catch((e) => {
+            debugLog('Failed to fetch video info:', e);
             document.getElementById('video-title').textContent = '';
             document.getElementById('video-thumb').classList.add('hidden');
         });
@@ -536,9 +510,11 @@ document.getElementById('load-btn').onclick = () => {
     const url = document.getElementById('youtube-url').value;
     const videoId = getYouTubeId(url);
     if (!videoId) {
+        debugLog('Invalid YouTube URL:', url);
         alert('Invalid YouTube URL');
         return;
     }
+    debugLog('Loading video:', videoId);
     currentVideoId = videoId;
     setVideoInfo(videoId);
     socket.emit('change_video', { channel: currentChannel, video_id: videoId });
