@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JoShares - Shared Music Sessions</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #181818; color: #fff; margin: 0; }
+        .container { max-width: 600px; margin: 40px auto; background: #232323; border-radius: 10px; padding: 24px; box-shadow: 0 2px 12px #0008; }
+        h1 { text-align: center; }
+        .channel-list { display: flex; justify-content: space-around; margin-bottom: 24px; }
+        .channel-btn { background: #333; color: #fff; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 1.1em; }
+        .channel-btn.selected { background: #1db954; }
+        #player { margin: 20px 0; }
+        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; }
+        .controls button { background: #1db954; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+        .video-info { text-align: center; margin-bottom: 10px; }
+        .hidden { display: none; }
+        .input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .input-row input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>JoShares</h1>
+    <div id="channel-select">
+        <h2>Select a Channel</h2>
+        <div class="channel-list">
+            <button class="channel-btn" data-channel="1">Channel 1</button>
+            <button class="channel-btn" data-channel="2">Channel 2</button>
+            <button class="channel-btn" data-channel="3">Channel 3</button>
+            <button class="channel-btn" data-channel="4">Channel 4</button>
+        </div>
+        <div class="input-row">
+            <input type="text" id="username" placeholder="Enter your username (optional)">
+            <button id="join-btn">Join</button>
+        </div>
+    </div>
+    <div id="session" class="hidden">
+        <div class="video-info">
+            <img id="video-thumb" src="" width="120" style="border-radius:8px;" class="hidden"><br>
+            <span id="video-title"></span>
+        </div>
+        <div class="input-row">
+            <input type="text" id="youtube-url" placeholder="Paste YouTube link here">
+            <button id="load-btn">Load</button>
+        </div>
+        <div id="player"></div>
+        <div class="controls">
+            <button id="play-btn">Play</button>
+            <button id="pause-btn">Pause</button>
+        </div>
+        <div style="text-align:center; margin-top:10px;">
+            <button id="leave-btn" style="background:#e74c3c;">Leave Channel</button>
+        </div>
+    </div>
+</div>
+<script>
+let socket;
+let player;
+let currentChannel = null;
+let currentVideoId = null;
+let isSeeking = false;
+let username = '';
+
+function getYouTubeId(url) {
+    const regExp = /^.*(?:youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[1].length === 11) ? match[1] : null;
+}
+
+function onYouTubeIframeAPIReady() {
+    player = new YT.Player('player', {
+        height: '315', width: '560',
+        videoId: '',
+        events: {
+            'onReady': onPlayerReady,
+            'onStateChange': onPlayerStateChange
+        }
+    });
+}
+window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
+
+function onPlayerReady(event) {}
+
+function onPlayerStateChange(event) {
+    if (!currentChannel) return;
+    if (event.data === YT.PlayerState.PLAYING && !isSeeking) {
+        socket.emit('play', {
+            channel: currentChannel,
+            video_id: currentVideoId,
+            timestamp: player.getCurrentTime(),
+        });
+    } else if (event.data === YT.PlayerState.PAUSED && !isSeeking) {
+        socket.emit('pause', {
+            channel: currentChannel,
+            timestamp: player.getCurrentTime(),
+        });
+    }
+}
+
+function syncToState(state) {
+    if (!state || !state.video_id) return;
+    currentVideoId = state.video_id;
+    player.loadVideoById(state.video_id, state.timestamp || 0);
+    setVideoInfo(state.video_id);
+    if (state.is_playing) {
+        setTimeout(() => {
+            isSeeking = true;
+            player.seekTo(state.timestamp || 0, true);
+            player.playVideo();
+            setTimeout(() => { isSeeking = false; }, 500);
+        }, 500);
+    } else {
+        setTimeout(() => {
+            isSeeking = true;
+            player.seekTo(state.timestamp || 0, true);
+            player.pauseVideo();
+            setTimeout(() => { isSeeking = false; }, 500);
+        }, 500);
+    }
+}
+
+function setVideoInfo(videoId) {
+    fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('video-title').textContent = data.title;
+            document.getElementById('video-thumb').src = data.thumbnail_url;
+            document.getElementById('video-thumb').classList.remove('hidden');
+        })
+        .catch(() => {
+            document.getElementById('video-title').textContent = '';
+            document.getElementById('video-thumb').classList.add('hidden');
+        });
+}
+
+document.querySelectorAll('.channel-btn').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.channel-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        currentChannel = btn.dataset.channel;
+    };
+});
+
+document.getElementById('join-btn').onclick = () => {
+    if (!currentChannel) {
+        alert('Please select a channel!');
+        return;
+    }
+    username = document.getElementById('username').value || 'Anonymous';
+    document.getElementById('channel-select').classList.add('hidden');
+    document.getElementById('session').classList.remove('hidden');
+    if (!socket) {
+        socket = io();
+        socket.on('sync', syncToState);
+        socket.on('play', state => {
+            if (state.video_id !== currentVideoId) {
+                player.loadVideoById(state.video_id, state.timestamp || 0);
+                setVideoInfo(state.video_id);
+            }
+            isSeeking = true;
+            player.seekTo(state.timestamp || 0, true);
+            player.playVideo();
+            setTimeout(() => { isSeeking = false; }, 500);
+        });
+        socket.on('pause', data => {
+            isSeeking = true;
+            player.pauseVideo();
+            setTimeout(() => { isSeeking = false; }, 500);
+        });
+        socket.on('seek', data => {
+            isSeeking = true;
+            player.seekTo(data.timestamp || 0, true);
+            setTimeout(() => { isSeeking = false; }, 500);
+        });
+        socket.on('change_video', syncToState);
+    }
+    socket.emit('join', { channel: currentChannel, username });
+};
+
+document.getElementById('load-btn').onclick = () => {
+    const url = document.getElementById('youtube-url').value;
+    const videoId = getYouTubeId(url);
+    if (!videoId) {
+        alert('Invalid YouTube URL');
+        return;
+    }
+    currentVideoId = videoId;
+    setVideoInfo(videoId);
+    socket.emit('change_video', { channel: currentChannel, video_id: videoId });
+};
+
+document.getElementById('play-btn').onclick = () => {
+    if (player && currentChannel && currentVideoId) {
+        socket.emit('play', {
+            channel: currentChannel,
+            video_id: currentVideoId,
+            timestamp: player.getCurrentTime(),
+        });
+        player.playVideo();
+    }
+};
+
+document.getElementById('pause-btn').onclick = () => {
+    if (player && currentChannel) {
+        socket.emit('pause', {
+            channel: currentChannel,
+            timestamp: player.getCurrentTime(),
+        });
+        player.pauseVideo();
+    }
+};
+
+document.getElementById('leave-btn').onclick = () => {
+    location.reload();
+};
+</script>
+</body>
+</html> 
